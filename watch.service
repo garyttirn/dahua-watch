@@ -1,0 +1,13 @@
+[Unit]
+Description=Amcrest/Dahua Motion Detect Notification Receiver
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/sbin/watch.py
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=watch
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

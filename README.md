@@ -1,3 +1,7 @@
 # dahua-watch
 
-User cor35vet on ipcamtalk wrote a small python script to monitor Dahua IVS events. See here: https://ipcamtalk.com/threads/trigger-blue-iris-with-ivs.17303/#post-163196 136. I modified it to send MQTT messages so I could incorporate my cameras into HomeAssistant.
+Script to monitor Amcrest/Dahua Camera Events and report those events to Motion Sensor on Vera Controllers (https://getvera.com/collections/controllers-products) 
+
+Based on https://github.com/johnnyletrois/dahua-watch
+
+

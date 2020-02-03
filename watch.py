@@ -1,39 +1,35 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Version 2.1.2020
+# Dahua/Amcrest Event Watcher based on https://github.com/johnnyletrois/dahua-watch
 import logging
 import socket
 import pycurl
 import time
 import shlex
 import subprocess
-import paho.mqtt.client as mqtt
 
 ALARM_DELAY = 30
-
-#PLAY_TEMPLATE = "gst-launch-1.0 playbin uri=\"rtsp://{user}:{pass}@{host}:554/cam/realmonitor?channel=1&subtype=2\" latency=300000000 audio-sink=\"autoaudiosink sync=false\""
 URL_TEMPLATE = "http://{host}:{port}/cgi-bin/eventManager.cgi?action=attach&codes=%5B{events}%5D"
 
 CAMERAS = [
 	{
-		"host": "CAM_1_IP",
+		"host": "<camera IP address or hostname>",
 		"port": 80,
-		"user": "USERNAME",
-		"pass": "PASSWORD",
-		"events": "CrossLineDetection"
+		"user": "<camera username>",
+		"pass": "<camera password>",
+		"events": "VideoMotion,AudioMutation,AudioAnomaly",
+		"veradevice" : "<vera camera motion sensor device id to report events>",
+		"vera" : "<Vera IP address or hostname>"
 	},
 	{
-		"host": "CAM_2_IP",
+		"host": "<camera IP address or hostname>",
 		"port": 80,
-		"user": "USER",
-		"pass": "PASSWORD",
-		"events": "CrossLineDetection"
-	},
-	{
-		"host": "CAM_3_IP",
-		"port": 80,
-		"user": "USER",
-		"pass": "PASSWORD",
-		"events": "CrossLineDetection"
+		"user": "<camera IP address or hostname>",
+		"pass": "<camera password>",
+		"events": "VideoMotion,AudioMutation,AudioAnomaly,CrossLineDetection,FaceDetection",
+		"veradevice" : "<vera camera motion sensor device id to report events>",
+		"vera" : "<Vera IP address or hostname>"
 	}
 ]
 
@@ -50,75 +46,34 @@ class DahuaCamera():
 			"Active": None,
 			"Last": None
 		})
-		#self.Player = None
-
-	#def StartPlayer(self):
-	#	if self.Player:
-	#		return
-
-	#	print("[{0}] StartPlayer()".format(self.Index))
-	#	self.Master.OnStartPlayer()
-
-	#	Command = PLAY_TEMPLATE.format(**self.Camera)
-	#	Args = shlex.split(Command)
-	#	self.Player = subprocess.Popen(Args,
-	#					stdin = subprocess.DEVNULL,
-	#					stdout = subprocess.DEVNULL,
-	#					stderr = subprocess.DEVNULL)
-
-	#def StopPlayer(self):
-	#	if not self.Player:
-	#		return
-
-	#	print("[{0}] StopPlayer()".format(self.Index))
-	#	self.Player.kill()
-	#	self.Player.wait()
-	#	self.Player = None
-	#	self.Master.OnStopPlayer()
-		
-	def SensorOn(self):
-		sensorurl = ("home-assistant/cameras/{0}/IVS").format(self.Index);
-		client = mqtt.Client()
-		client.connect("MQTT_BROKER_IP",1883,60)
-		#client.publish("home-assistant/cameras/garage/motion", "ON");
-		#client.publish("home-assistant/cameras/garage/IVS", "ON");
-		client.publish(sensorurl, "ON");
-		client.disconnect();
-		
-	def SensorOff(self):
-		sensorurl = ("home-assistant/cameras/{0}/IVS").format(self.Index);
-		client = mqtt.Client()
-		client.connect("MQTT_BROKER_IP",1883,60)
-		#client.publish("home-assistant/cameras/garage/motion", "OFF");
-		#client.publish("home-assistant/cameras/garage/IVS", "OFF");
-		client.publish(sensorurl, "OFF");
-		client.disconnect();
 
 	def OnAlarm(self, State):
-		#print("[{0}] Alarm triggered! -> {1}".format(self.Index, "ON" if State else "OFF"))
+		c = pycurl.Curl()
+		# DEBUG c.setopt(c.VERBOSE, True)
 
 		if State:
-			self.SensorOn()
-			print("Motion Detected")
+			c.setopt(c.URL,"http://%s:3480/data_request?id=variableset&DeviceNum=%s&serviceId=urn:micasaverde-com:serviceId:SecuritySensor1&Variable=Tripped&Value=1" % (self.Camera["vera"], self.Camera["veradevice"]))
+			print("[{0}-{1}] Motion Detected)".format(self.Index, self.Camera["host"]))
 		else:
-			self.SensorOff()
-			print("Motion Stopped")
+			c.setopt(c.URL,"http://%s:3480/data_request?id=variableset&DeviceNum=%s&serviceId=urn:micasaverde-com:serviceId:SecuritySensor1&Variable=Tripped&Value=0" % (self.Camera["vera"], self.Camera["veradevice"]))
+			print("[{0}-{1}] Motion Stopped)".format(self.Index, self.Camera["host"]))
+
+		try:
+			c.perform()
+		except pycurl.error:
+			print("Vera Connection error")	
+
+		c.close()
 
 	def OnConnect(self):
-		print("[{0}] OnConnect()".format(self.Index))
+		print("[{0}-{1}] OnConnect()".format(self.Index,self.Camera["host"]))
 		self.Connected = True
 
 	def OnDisconnect(self, reason):
-		print("[{0}] OnDisconnect({1})".format(self.Index, reason))
+		# print("[{0}-{1}] OnDisconnect({2})".format(self.Index,self.Camera["host"],reason))
 		self.Connected = False
-	#	self.StopPlayer()
 
 	def OnTimer(self):
-		#if self.Player:
-		#	self.Player.poll()
-		#	if self.Player.returncode != None:
-		#		self.StopPlayer()
-
 		if self.Alarm["Active"] == False and time.time() - self.Alarm["Last"] > ALARM_DELAY:
 			self.Alarm["Active"] = None
 			self.Alarm["Last"] = None
@@ -144,7 +99,7 @@ class DahuaCamera():
 			self.ParseAlarm(Alarm)
 
 	def ParseAlarm(self, Alarm):
-		print("[{0}] ParseAlarm({1})".format(self.Index, Alarm))
+		print("[{0}-{1}] ParseAlarm({2})".format(self.Index, self.Camera["host"], Alarm))
 
 		if Alarm["Code"] not in self.Camera["events"].split(','):
 			return
@@ -186,16 +141,6 @@ class DahuaMaster():
 			self.CurlMultiObj.add_handle(CurlObj)
 			self.NumCurlObjs += 1
 
-	#def OnStartPlayer(self):
-	#	self.NumActivePlayers += 1
-	#	if self.NumActivePlayers == 1:
-	#		subprocess.run(["xset", "dpms", "force", "on"])
-
-	#def OnStopPlayer(self):
-	#	self.NumActivePlayers -= 1
-	#	if self.NumActivePlayers == 0:
-	#		subprocess.run(["xset", "dpms", "force", "off"])
-
 	def OnTimer(self):
 		for Camera in self.Cameras:
 			Camera.OnTimer()
@@ -207,6 +152,7 @@ class DahuaMaster():
 				break
 
 		while 1:
+			time.sleep(.05)
 			Ret = self.CurlMultiObj.select(timeout)
 			if Ret == -1:
 				self.OnTimer()
@@ -250,3 +196,4 @@ if __name__ == '__main__':
 
 	Master = DahuaMaster()
 	Master.Run()
+
