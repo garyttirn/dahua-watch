@@ -9,7 +9,7 @@ Based on https://github.com/johnnyletrois/dahua-watch
 
 Download watch.py to /usr/local/sbin/watch.py
 
-Make you have python3 and pycurl-library
+Make sure you have python3 and pycurl-library
 
 On Ubuntu 18.04 :
 `apt install python3 python3-pycurl`
